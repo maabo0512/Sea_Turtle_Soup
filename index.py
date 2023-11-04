@@ -128,6 +128,36 @@ def present_question():
         st.write(st.session_state.current_question['title'])
         st.session_state.start_time = time.time()  # 問題開始時間をリセット
 
+# 残り時間の管理とアラート表示の関数
+def manage_time_limit():
+    # time_left を初期値で初期化
+    time_left = None
+
+    if st.session_state.start_time is not None:
+        time_limit = set_time_limit(st.session_state.difficulty)
+        if time_limit is not None and st.session_state.start_time is not None:
+            elapsed_time = time.time() - st.session_state.start_time
+            time_left = max(time_limit - elapsed_time, 0)
+            time_display = f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒"
+            # 残り時間をサイドバーに常に表示する
+            st.sidebar.markdown(f"<h3>{time_display}</h3>", unsafe_allow_html=True)
+            # 制限時間が近づいている場合は色を変えて警告する
+            if time_left < 180:
+                st.sidebar.markdown(f"<h3 style='color:red;'>{time_display}</h3>", unsafe_allow_html=True)
+
+    # time_left が値を持つ場合のみ以下のコードを実行
+    if time_left is not None:
+        if time_left <= 0:
+            if not st.session_state.time_up:
+                st.session_state.time_up = True
+                st.error("制限時間です。次の問題に進んでください。")
+        elif time_left < 30:   # 30秒未満
+            st.error("残り30秒です！")
+        elif time_left < 60:   # 1分未満
+            st.error("残り1分です！")
+        elif time_left < 180:  # 3分未満
+            st.warning("残り3分です！")
+
 # メインページの表示
 def main_page():
     # UIのタイトル
@@ -137,7 +167,6 @@ def main_page():
     with st.expander("ウミガメのスープの遊び方"):
         display_how_to_play()
 
-    
     # 経験値とレベルの表示
     st.sidebar.header(f"レベル: {st.session_state.level}")
     st.sidebar.progress((st.session_state.exp % 100) / 100)
@@ -152,16 +181,13 @@ def main_page():
         st.session_state.current_question = get_question(st.session_state.difficulty)
     if st.session_state.current_question:
         st.subheader(st.session_state.current_question['title'])
-            
- # 問題の出題と制限時間の設定
-    if st.button('この問題を解く') or st.session_state.start_time is not None:
+
+    # 問題の出題と制限時間の設定
+    if st.button('この問題を解く', key="solve_question") or st.session_state.start_time is not None:
         if st.session_state.current_question:
             st.write(st.session_state.current_question['text'])  # 問題のテキストを表示
             st.session_state.start_time = time.time()
             st.session_state.time_up = False
-
-        # 質問と答えのUIを表示
-        # ...
 
     # 残り時間があるときのみ質問履歴を表示
     if st.session_state.history and not st.session_state.time_up:
@@ -170,59 +196,34 @@ def main_page():
             st.text(f"Q: {entry['question']}")
             st.text(f"A: {entry['answer']}")
 
-# 残り時間の管理とアラート表示の関数
-def manage_time_limit():
-    # time_left を初期値で初期化
-    time_left = None
-
-    if st.session_state.start_time is not None:
-        time_limit = set_time_limit(st.session_state.difficulty)
-        if time_limit is not None and st.session_state.start_time is not None:
-            elapsed_time = time.time() - st.session_state.start_time
-            time_left = max(time_limit - elapsed_time, 0)
-            time_display = f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒"
-            st.sidebar.text(f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒")
-            st.sidebar.markdown(f"<h3 style='color:red;'>{time_display}</h3>", unsafe_allow_html=True)
-
-    # time_left が値を持つ場合のみ以下のコードを実行
-    if time_left is not None:
-        if time_left <= 0:
-            if not st.session_state.time_up:
-                st.session_state.time_up = True
-                st.error("制限時間です。次の問題に進んでください。")
-        elif time_left < 30:   # 30秒未満
-            st.error("残り30秒です！")
-        elif time_left < 60:   # 1分未満
-            st.error("残り1分です！")
-        elif time_left < 180:  # 3分未満
-            st.warning("残り3分です！")
-            
-# 制限時間の表示と管理
+    # 制限時間の表示と管理
     manage_time_limit()
 
-# 問題が出題されている場合は質問と答えの入力を許可
-    if st.session_state.current_question:
+    # 問題が出題されている場合は質問と答えの入力を許可
+    if st.session_state.current_question and not st.session_state.time_up:
         # 質問の送信
         question = st.text_input("質問を入力してください", key="question")
-        if st.button('質問を送信'):
+        if st.button('質問を送信', key="send_question"):
             if question:
                 # 質問をAPIに送信して回答を取得
                 answer = ask_question_to_gpt(question)
                 # 履歴を更新
                 st.session_state.history.append({'question': question, 'answer': answer})
-                st.session_state['question'] = ""  # 質問入力欄をリセット
+                # 質問入力欄をリセット
+                st.session_state.question = ""
             else:
                 st.error("質問を入力してください。")
 
         # 答えの送信
         user_answer = st.text_input("答えが分かったらここに入力してください", key="user_answer")
-        if st.button('答えを送信'):
-            if check_answer(user_answer):
-                st.success("大正解！")
-                add_experience(len(st.session_state.history))  # 正解したので経験値を追加
-                reset_question()
-            else:
-                st.error("不正解です。もう一度考えてみてください。")
+        if st.button('答えを送信', key="send_answer"):
+            if user_answer:
+                if check_answer(user_answer):
+                    st.success("大正解！")
+                    add_experience(len(st.session_state.history))
+                    reset_question()
+                else:
+                    st.error("不正解です。もう一度考えてみてください。")
 
 # メインページの呼び出し
 if __name__ == "__main__":
