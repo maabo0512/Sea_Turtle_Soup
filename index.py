@@ -25,7 +25,7 @@ if 'time_up' not in st.session_state:
 if 'questions' not in st.session_state:
     st.session_state.questions = [
         {
-            'title': '問題：プログラミングに興味があるハヤトくん',
+            'title': 'プログラミングに興味があるハヤトくん',
             'text': 'プログラミングに興味があるハヤトくん。一番プログラミングを教えるのが上手いと思うプログラミングスクールへ向かったハヤトくんは、「定員に達しましたため、受付を終了します」の札を見て喜んでいます。何故でしょうか？',
             'answer': 'ハヤトくんはそのプログラミングスクールの経営者であり、自分の経営するプログラミングスクールの募集状況を確認しに行ったところ、満員となっていることが分かったため喜んだ。',
             'difficulty': 'かんたん'
@@ -59,7 +59,7 @@ def display_how_to_play():
         1. 出題者はあなたに「ふしぎな内容が書かれた問題」を出します。
         2. あなたはその問題について、自由に質問してください。
         3. 問題を出題者はその質問に「はい」「いいえ」で答えます。
-        4. あなたは何度も質問しながら謎解きをして、答え（真相）を当てることができればゲームはクリアです！
+        4. あなたは何度も質問しながら謎解きをして、答え（真相）を当てることができればゲームクリアです！
     """)
 
 # 経験値とレベルの計算式
@@ -139,11 +139,17 @@ def manage_time_limit():
             elapsed_time = time.time() - st.session_state.start_time
             time_left = max(time_limit - elapsed_time, 0)
             time_display = f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒"
-            # 残り時間をサイドバーに常に表示する
-            st.sidebar.markdown(f"<h3>{time_display}</h3>", unsafe_allow_html=True)
+
+# 残り時間をメインページに表示
+    if time_left is not None:
+        time_display = f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒"
+        st.markdown(f"<h3>{time_display}</h3>", unsafe_allow_html=True)
+        if time_left < 180:
+            st.markdown(f"<h3 style='color:red;'>{time_display}</h3>", unsafe_allow_html=True)
+
             # 制限時間が近づいている場合は色を変えて警告する
             if time_left < 180:
-                st.sidebar.markdown(f"<h3 style='color:red;'>{time_display}</h3>", unsafe_allow_html=True)
+                st.markdown(f"<h3 style='color:red;'>{time_display}</h3>", unsafe_allow_html=True)
 
     # time_left が値を持つ場合のみ以下のコードを実行
     if time_left is not None:
@@ -168,26 +174,51 @@ def main_page():
         display_how_to_play()
 
     # 経験値とレベルの表示
-    st.sidebar.header(f"レベル: {st.session_state.level}")
-    st.sidebar.progress((st.session_state.exp % 100) / 100)
-    st.sidebar.text(f"経験値: {st.session_state.exp}")
+    st.write(f"あなたのウミガメレベル: {st.session_state.level}")
+    st.progress((st.session_state.exp % 100) / 100)
+    st.write(f"経験値: {st.session_state.exp}")
+    
+    st.markdown("""
+    ***
+    """)
 
     # 難易度の選択
     difficulty_options = ['かんたん', 'ふつう', 'むずかしい']
-    st.session_state.difficulty = st.sidebar.radio("難易度", difficulty_options)
+    st.session_state.difficulty = st.selectbox("難易度を選んでください", difficulty_options)
+
+    # 難易度に応じた問題のタイトルを選択するためのタブ
+    question_titles = [q['title'] for q in st.session_state.questions if q['difficulty'] == st.session_state.difficulty]
+    selected_title = st.selectbox("問題を選んでください", question_titles)
+    
+    st.markdown("""
+    ***
+    """)
+
+    # 選択されたタイトルに応じて問題を取得
+    selected_question = next((q for q in st.session_state.questions if q['title'] == selected_title), None)
+    st.session_state.current_question = selected_question
 
     # ゲーム開始前に問題のタイトルを表示
-    if st.session_state.current_question is None or st.session_state.current_question['difficulty'] != st.session_state.difficulty:
-        st.session_state.current_question = get_question(st.session_state.difficulty)
-    if st.session_state.current_question:
-        st.subheader(st.session_state.current_question['title'])
+    if selected_question:
+        st.subheader(selected_question['title'])
 
+    # 制限時間の表示と管理
+    time_left_display = manage_time_limit()
+    
     # 問題の出題と制限時間の設定
-    if st.button('この問題を解く', key="solve_question") or st.session_state.start_time is not None:
+    # ユニークなキーを使用してボタンを作成
+    if st.button('この問題を解く', key='solve_question'):
         if st.session_state.current_question:
             st.write(st.session_state.current_question['text'])  # 問題のテキストを表示
             st.session_state.start_time = time.time()
             st.session_state.time_up = False
+            st.session_state.history = []  # 履歴をリセット
+            # 制限時間のリセットと表示
+            time_left_display = manage_time_limit()
+
+    # 残り時間の表示
+    if time_left_display:
+        st.markdown(f"<h3>{time_left_display}</h3>", unsafe_allow_html=True)
 
     # 残り時間があるときのみ質問履歴を表示
     if st.session_state.history and not st.session_state.time_up:
@@ -196,14 +227,11 @@ def main_page():
             st.text(f"Q: {entry['question']}")
             st.text(f"A: {entry['answer']}")
 
-    # 制限時間の表示と管理
-    manage_time_limit()
-
     # 問題が出題されている場合は質問と答えの入力を許可
     if st.session_state.current_question and not st.session_state.time_up:
         # 質問の送信
         question = st.text_input("質問を入力してください", key="question")
-        if st.button('質問を送信', key="send_question"):
+        if st.button('質問を送信'):
             if question:
                 # 質問をAPIに送信して回答を取得
                 answer = ask_question_to_gpt(question)
@@ -216,7 +244,7 @@ def main_page():
 
         # 答えの送信
         user_answer = st.text_input("答えが分かったらここに入力してください", key="user_answer")
-        if st.button('答えを送信', key="send_answer"):
+        if st.button('答えを送信'):
             if user_answer:
                 if check_answer(user_answer):
                     st.success("大正解！")
