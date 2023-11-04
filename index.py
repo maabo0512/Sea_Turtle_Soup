@@ -17,6 +17,18 @@ if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 if 'difficulty' not in st.session_state:
     st.session_state.difficulty = 'かんたん'
+if 'current_question' not in st.session_state:
+    st.session_state.current_question = None
+if 'questions' not in st.session_state:
+    st.session_state.questions = [
+        {
+            'title': 'プログラミングに興味があるハヤトくん',
+            'text': 'プログラミングに興味があるハヤトくん。一番プログラミングを教えるのが上手いと思うプログラミングスクールへ向かったハヤトくんは、「定員に達しましたため、受付を終了します」の札を見て喜んでいます。何故でしょうか？',
+            'answer': 'ハヤトくんはそのプログラミングスクールの経営者であり、自分の経営するプログラミングスクールの募集状況を確認しに行ったところ、満員となっていることが分かったため喜んだ。',
+            'difficulty': 'かんたん'
+        },
+        # 他の問題も同様に定義
+    ]
 
 # 経験値とレベルの計算式
 def calculate_level(exp):
@@ -50,6 +62,32 @@ def set_time_limit(difficulty):
     else:
         return None
 
+# 問題をリセットする関数
+def reset_question():
+    st.session_state.current_question = None
+    st.session_state.history = []
+    st.session_state.start_time = None
+
+# 問題を取得する関数
+def get_question(difficulty):
+    available_questions = [q for q in st.session_state.questions if q['difficulty'] == difficulty]
+    # 今回はランダムではなく、リストの最初の問題を選択
+    return available_questions[0] if available_questions else None
+
+# 問題を出題する関数
+def present_question():
+    if st.session_state.current_question is None:
+        st.session_state.current_question = get_question(st.session_state.difficulty)
+    if st.session_state.current_question is not None:
+        st.write(st.session_state.current_question['title'])
+        st.write(st.session_state.current_question['text'])
+        st.session_state.start_time = time.time()  # 問題開始時間をリセット
+
+# 問題の正解をチェックする関数
+def check_answer(user_answer):
+    correct_answer = st.session_state.current_question['answer']
+    return user_answer.strip().lower() == correct_answer.strip().lower()
+
 # UIのタイトル
 st.title('ウミガメのスープアプリ')
 
@@ -62,7 +100,7 @@ st.sidebar.text(f"経験値: {st.session_state.exp}")
 difficulty_options = ['かんたん', 'ふつう', 'むずかしい']
 st.session_state.difficulty = st.sidebar.radio("難易度", difficulty_options)
 
-# 制限時間の表示
+# 制限時間の表示と管理
 time_limit = set_time_limit(st.session_state.difficulty)
 if time_limit is not None:
     if st.session_state.start_time is None:
@@ -72,7 +110,7 @@ if time_limit is not None:
     st.sidebar.text(f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒")
     if time_left <= 0:
         st.error("制限時間です。次の問題に進んでください。")
-        # 問題をリセットするコードをここに追加
+        reset_question()
 
 # 以下、質問入力、質問送信ボタン、履歴の表示などのコードはそのまま...
 
@@ -87,3 +125,25 @@ if st.button('質問する'):
         add_experience(len(st.session_state.history))
     else:
         st.error("質問を入力してください。")
+
+# 問題の出題
+present_question()
+
+# ユーザーによる回答入力
+user_answer = st.text_input("答えが分かったらここに入力してください")
+
+# 回答ボタン
+if st.button('答えを入力'):
+    if check_answer(user_answer):
+        st.success("大正解！")
+        add_experience(len(st.session_state.history))  # 正解したので経験値を追加
+        reset_question()
+    else:
+        st.error("不正解です。もう一度考えてみてください。")
+
+# 問題を解き直す、別の問題を解くの選択
+if st.button('同じ問題を解き直す'):
+    reset_question()
+    present_question()
+if st.button('別の問題を解く'):
+    reset_question()
