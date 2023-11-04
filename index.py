@@ -22,6 +22,10 @@ if 'current_question' not in st.session_state:
     st.session_state.current_question = None
 if 'time_up' not in st.session_state:
     st.session_state.time_up = False
+if 'question' not in st.session_state:
+    st.session_state.question = ""
+if 'user_answer' not in st.session_state:
+    st.session_state.user_answer = ""
 if 'questions' not in st.session_state:
     st.session_state.questions = [
         {
@@ -31,13 +35,13 @@ if 'questions' not in st.session_state:
             'difficulty': 'かんたん'
         },
         {
-            'title': '問題：逆走するタクシー運転手のノリミネさん',
+            'title': '逆走するタクシー運転手のノリミネさん',
             'text': 'タクシー運転手をしているノリミネさん。ある時ノリミネさんは、一方通行の道を逆方向に走っていました。パトロール中の警察官に見られてしまいましたが、怒られませんでした。何故でしょうか？',
             'answer': 'ノリミネさんは車に乗っておらず、一方通行の道を徒歩で逆方向に進んでいただけだったため。',
             'difficulty': 'ふつう'
         },
         {
-            'title': '問題：双子じゃない！？',
+            'title': '双子じゃない！？',
             'text': 'ある女性から生まれた子供2人は、同じ日の同じ時間に誕生しています。でも、なぜか2人は双子ではありませんでした。何故でしょうか？',
             'answer': '女性の子供は双子ではなく、三つ子だったため。',
             'difficulty': 'むずかしい'
@@ -144,12 +148,9 @@ def manage_time_limit():
     if time_left is not None:
         time_display = f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒"
         st.markdown(f"<h3>{time_display}</h3>", unsafe_allow_html=True)
+        # 制限時間が近づいている場合は色を変えて警告する
         if time_left < 180:
             st.markdown(f"<h3 style='color:red;'>{time_display}</h3>", unsafe_allow_html=True)
-
-            # 制限時間が近づいている場合は色を変えて警告する
-            if time_left < 180:
-                st.markdown(f"<h3 style='color:red;'>{time_display}</h3>", unsafe_allow_html=True)
 
     # time_left が値を持つ場合のみ以下のコードを実行
     if time_left is not None:
@@ -230,8 +231,8 @@ def main_page():
     # 問題が出題されている場合は質問と答えの入力を許可
     if st.session_state.current_question and not st.session_state.time_up:
         # 質問の送信
-        question = st.text_input("質問を入力してください", key="question")
-        if st.button('質問を送信'):
+        question = st.text_input("質問を入力してください", key="question_input")
+        if st.button('質問を送信', key='send_question'):  # ボタンにユニークなキーを追加
             if question:
                 # 質問をAPIに送信して回答を取得
                 answer = ask_question_to_gpt(question)
@@ -239,19 +240,17 @@ def main_page():
                 st.session_state.history.append({'question': question, 'answer': answer})
                 # 質問入力欄をリセット
                 st.session_state.question = ""
-            else:
-                st.error("質問を入力してください。")
 
         # 答えの送信
-        user_answer = st.text_input("答えが分かったらここに入力してください", key="user_answer")
-        if st.button('答えを送信'):
-            if user_answer:
-                if check_answer(user_answer):
-                    st.success("大正解！")
-                    add_experience(len(st.session_state.history))
-                    reset_question()
-                else:
-                    st.error("不正解です。もう一度考えてみてください。")
+    user_answer = st.text_input("答えが分かったらここに入力してください", key="answer_input")
+    if st.button('答えを送信', key='submit_answer'):  # ボタンにユニークなキーを追加
+        if user_answer:
+            if check_answer(user_answer):
+                st.success("大正解！")
+                add_experience(len(st.session_state.history))
+                reset_question()
+            else:
+                st.error("不正解です。もう一度考えてみてください。")
 
 # メインページの呼び出し
 if __name__ == "__main__":
