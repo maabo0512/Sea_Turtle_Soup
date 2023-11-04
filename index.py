@@ -3,7 +3,7 @@ import openai # openAIのchatGPTのAIを活用するための機能をインポ�
 
 
 # アクセスの為のキーをopenai.api_keyに代入し、設定
-openai.api_key = st.secrets["api_key"]
+openai.api_key = st.secrets["openai"]["api_key"]
 
 # chatGPTが可能な文章のテイストの設定一覧を作成
 content_kind_of =[
