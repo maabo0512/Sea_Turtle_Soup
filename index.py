@@ -1,113 +1,89 @@
-import streamlit as st # フロントエンドを扱うstreamlitの機能をインポート
-import openai # openAIのchatGPTのAIを活用するための機能をインポート
+import streamlit as st
+import openai
+import math
+import time
 
-
-# アクセスの為のキーをopenai.api_keyに代入し、設定
+# アクセスのためのキーを設定
 openai.api_key = st.secrets["openai"]["api_key"]
 
-# chatGPTが可能な文章のテイストの設定一覧を作成
-content_kind_of =[
-    "中立的で客観的な文章",
-    "分かりやすい、簡潔な文章",
-    "親しみやすいトーンの文章",
-    "専門用語をできるだけ使わない、一般読者向けの文章",
-    "言葉の使い方にこだわり、正確な表現を心がけた文章",
-    "ユーモアを交えた文章",
-    "シンプルかつわかりやすい文法を使った文章",
-    "面白く、興味深い内容を伝える文章",
-    "具体的でイメージしやすい表現を使った文章",
-    "人間味のある、感情や思いを表現する文章",
-    "引用や参考文献を適切に挿入した、信頼性の高い文章",
-    "読み手の興味を引きつけるタイトルやサブタイトルを使った文章",
-    "統計データや図表を用いたわかりやすい文章",
-    "独自の見解や考え方を示した、論理的な文章",
-    "問題提起から解決策までを網羅した、解説的な文章",
-    "ニュース性の高い、旬なトピックを取り上げた文章",
-    "エンターテイメント性のある、軽快な文章",
-    "読者の関心に合わせた、専門的な内容を深く掘り下げた文章",
-    "人物紹介やインタビューを取り入れた、読み物的な文章",
-]
+# セッション状態の初期化
+if 'history' not in st.session_state:
+    st.session_state.history = []
+if 'exp' not in st.session_state:
+    st.session_state.exp = 0
+if 'level' not in st.session_state:
+    st.session_state.level = 1
+if 'start_time' not in st.session_state:
+    st.session_state.start_time = None
+if 'difficulty' not in st.session_state:
+    st.session_state.difficulty = 'かんたん'
 
-# chatGPTにリクエストするためのメソッドを設定。引数には書いてほしい内容と文章のテイストと最大文字数を指定
-def run_gpt(content_text_to_gpt,content_kind_of_to_gpt,content_maxStr_to_gpt):
-    # リクエスト内容を決める
-    request_to_gpt = content_text_to_gpt + " また、これを記事として読めるように、記事のタイトル、目次、内容の順番で出力してください。内容は"+ content_maxStr_to_gpt + "文字以内で出力してください。" + "また、文章は" + content_kind_of_to_gpt + "にしてください。"
-    
-    # 決めた内容を元にopenai.ChatCompletion.createでchatGPTにリクエスト。オプションとしてmodelにAIモデル、messagesに内容を指定
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "user", "content": request_to_gpt },
-        ],
-    )
+# 経験値とレベルの計算式
+def calculate_level(exp):
+    return math.floor(exp ** (1/3))
 
-    # 返って来たレスポンスの内容はresponse.choices[0]["message"]["content"].strip()に格納されているので、これをoutput_contentに代入
-    output_content = response.choices[0]["message"]["content"].strip()
-    return output_content # 返って来たレスポンスの内容を返す
+# 経験値を追加する関数
+def add_experience(num_questions):
+    difficulty_multiplier = {
+        'かんたん': 1,
+        'ふつう': 2,
+        'むずかしい': 3
+    }
+    base_exp = 10
+    # 質問数が少ないほど高い経験値を獲得する
+    exp_gained = base_exp * difficulty_multiplier[st.session_state.difficulty] * (10 / num_questions)
+    st.session_state.exp += exp_gained
+    new_level = calculate_level(st.session_state.exp)
+    if new_level > st.session_state.level:
+        st.session_state.level = new_level
+        st.balloons()
+        st.success(f"レベルアップしました！ 新しいレベル: {st.session_state.level}")
 
-st.title('GPTに記事書かせるアプリ')# タイトル
-output_content = st.empty() # chatGPTから出力された文字を代入するための箱を用意
-
-select_box = ["シンプルモード", "箇条書きモード"] # モード選択のための選択肢を設定
-radio_select = st.sidebar.radio("入力モード", (select_box)) # サイドバーにモード選択のための選択肢を表示
-
-# select_box = ["シンプルモード", "箇条書きモード"]の０番目を選んだ場合は、シンプルモードの設定が表示される
-if (radio_select == select_box[0]):
-    content_text_to_gpt = st.sidebar.text_input("書かせたい内容を入力してください！") # 書かせたい内容を入力するための欄を表示
-else:
-    content_text_to_gpt = "" # 箇条書きから生成した書かせたい内容を代入するための箱を用意
-    content_text_to_gpt_array = [] # 空欄を排除した箇条書きの内容を整理するための配列を用意する
-
-    content_text_to_gpt_list = [] # 箇条書きで入力された内容を格納するための配列を用意
-    content_text_to_gpt_list.append(st.sidebar.text_input("書かせたい内容を箇条書きで入力してください",placeholder="箇条書き１つ目"))
-    content_text_to_gpt_list.append(st.sidebar.text_input("項目2つ目"))
-    content_text_to_gpt_list.append(st.sidebar.text_input("項目3つ目"))
-    content_text_to_gpt_list.append(st.sidebar.text_input("項目4つ目"))
-    content_text_to_gpt_list.append(st.sidebar.text_input("項目5つ目"))
-
-    # 入力された配列から空欄を排除し、content_text_to_gpt_arrayに代入
-    for c in content_text_to_gpt_list:
-        if c != "":
-            content_text_to_gpt_array.append(c)
-
-
-    # 整理した結果、１つでも内容がある場合、書かせたい内容に変換する
-    if content_text_to_gpt_array != []:
-        content_text_to_gpt = "記事にしてほしい内容を箇条書きにすると、" + "、".join(content_text_to_gpt_array) + " です。"
-
-
-            
-# 書かせたい内容のテイストを選択肢として表示する
-content_kind_of_to_gpt = st.sidebar.selectbox("文章の種類",options=content_kind_of)
-
-# chatGPTに出力させる文字数をスライドバーで表示する
-content_maxStr_to_gpt = str(st.sidebar.slider('記事の最大文字数', 100,1000,3000))
-
-# エラーが起きたときに表示するための箱をサイドバーに用意する
-warning_text = st.sidebar.empty()
-
-# ボタンを押したら、実行
-if st.sidebar.button('記事を書かせる'):
-
-    # 無駄にリクエストしないように書かせたい内容に中身があるか確認し、あれば実行
-    if (content_text_to_gpt != ""):
-        output_content.write("GPT生成中") # 状況案内を表示
-        warning_text.write("") # 正常に実行されているので、エラーを書き込む箱を空欄書き込みでリセット処理
-
-        # chatGPTにリクエストするためのメソッドを設定。引数には書いてほしい内容と文章のテイストと最大文字数を指定してメソッド実行し、output_content_textに代入
-        output_content_text = run_gpt(content_text_to_gpt,content_kind_of_to_gpt,content_maxStr_to_gpt)
-
-        # 代入された文字を表示
-        output_content.write(output_content_text) 
-
-        # 代入された文字をダウンロードするボタンを設置。オプションは内容をdataに指定、ファイル名をfile_nameに指定、ファイルタイプをmimeに指定
-        st.download_button(label='記事内容 Download', 
-                   data=output_content_text, 
-                   file_name='out_put.txt',
-                   mime='text/plain',
-                   )
+# 制限時間を設定する関数
+def set_time_limit(difficulty):
+    if difficulty == 'かんたん':
+        return None  # 制限時間なし
+    elif difficulty == 'ふつう':
+        return 20 * 60  # 制限時間20分
+    elif difficulty == 'むずかしい':
+        return 5 * 60  # 制限時間5分
     else:
-        warning_text.write("書かせたい内容が入力されていません") # 書かせたい内容がないので、エラーとして、用意したエラーの場所に書き込み
+        return None
 
+# UIのタイトル
+st.title('ウミガメのスープアプリ')
 
-    
+# 経験値とレベルの表示
+st.sidebar.header(f"レベル: {st.session_state.level}")
+st.sidebar.progress((st.session_state.exp % 100) / 100)
+st.sidebar.text(f"経験値: {st.session_state.exp}")
+
+# 難易度の選択
+difficulty_options = ['かんたん', 'ふつう', 'むずかしい']
+st.session_state.difficulty = st.sidebar.radio("難易度", difficulty_options)
+
+# 制限時間の表示
+time_limit = set_time_limit(st.session_state.difficulty)
+if time_limit is not None:
+    if st.session_state.start_time is None:
+        st.session_state.start_time = time.time()
+    elapsed_time = time.time() - st.session_state.start_time
+    time_left = max(time_limit - elapsed_time, 0)
+    st.sidebar.text(f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒")
+    if time_left <= 0:
+        st.error("制限時間です。次の問題に進んでください。")
+        # 問題をリセットするコードをここに追加
+
+# 以下、質問入力、質問送信ボタン、履歴の表示などのコードはそのまま...
+
+# 質問送信ボタン
+if st.button('質問する'):
+    if question:
+        # 質問をAPIに送信して回答を取得
+        answer = ask_question_to_gpt(question)
+        # 履歴を更新
+        st.session_state.history.append({'question': question, 'answer': answer})
+        # 経験値を追加
+        add_experience(len(st.session_state.history))
+    else:
+        st.error("質問を入力してください。")
