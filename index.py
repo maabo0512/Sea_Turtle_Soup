@@ -19,16 +19,8 @@ if 'difficulty' not in st.session_state:
     st.session_state.difficulty = 'かんたん'
 if 'current_question' not in st.session_state:
     st.session_state.current_question = None
-if 'questions' not in st.session_state:
-    st.session_state.questions = [
-        {
-            'title': 'プログラミングに興味があるハヤトくん',
-            'text': 'プログラミングに興味があるハヤトくん。一番プログラミングを教えるのが上手いと思うプログラミングスクールへ向かったハヤトくんは、「定員に達しましたため、受付を終了します」の札を見て喜んでいます。何故でしょうか？',
-            'answer': 'ハヤトくんはそのプログラミングスクールの経営者であり、自分の経営するプログラミングスクールの募集状況を確認しに行ったところ、満員となっていることが分かったため喜んだ。',
-            'difficulty': 'かんたん'
-        },
-        # 他の問題も同様に定義
-    ]
+if 'time_up' not in st.session_state:
+    st.session_state.time_up = False
 
 # 経験値とレベルの計算式
 def calculate_level(exp):
@@ -67,12 +59,7 @@ def reset_question():
     st.session_state.current_question = None
     st.session_state.history = []
     st.session_state.start_time = None
-
-# 問題を取得する関数
-def get_question(difficulty):
-    available_questions = [q for q in st.session_state.questions if q['difficulty'] == difficulty]
-    # 今回はランダムではなく、リストの最初の問題を選択
-    return available_questions[0] if available_questions else None
+    st.session_state.time_up = False
 
 # 問題を出題する関数
 def present_question():
@@ -80,13 +67,26 @@ def present_question():
         st.session_state.current_question = get_question(st.session_state.difficulty)
     if st.session_state.current_question is not None:
         st.write(st.session_state.current_question['title'])
-        st.write(st.session_state.current_question['text'])
         st.session_state.start_time = time.time()  # 問題開始時間をリセット
 
 # 問題の正解をチェックする関数
 def check_answer(user_answer):
     correct_answer = st.session_state.current_question['answer']
     return user_answer.strip().lower() == correct_answer.strip().lower()
+
+# ChatGPTに質問を送信し、回答を取得する関数
+def ask_question_to_gpt(question):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "あなたは「ウミガメのスープ」ゲームの出題者です。問題文と解答を確認した上で、ユーザーから送信される質問に対して適切な回答をしてください。以下の選択肢から回答してください: はい、いいえ、たぶんはい、たぶんいいえ、はい（回答にはあまり関係ない）、いいえ（回答にはあまり関係ない）、わからない。"},
+                {"role": "user", "content": question},
+            ]
+        )
+        return response.choices[0].message["content"].strip()
+    except openai.error.OpenAIError as e:
+        return f"エラーが発生しました: {e}"
 
 # UIのタイトル
 st.title('ウミガメのスープアプリ')
@@ -100,40 +100,36 @@ st.sidebar.text(f"経験値: {st.session_state.exp}")
 difficulty_options = ['かんたん', 'ふつう', 'むずかしい']
 st.session_state.difficulty = st.sidebar.radio("難易度", difficulty_options)
 
+# 問題の出題と制限時間の設定
+if st.button('この問題を解く'):
+    present_question()
+    st.session_state.time_up = False
+
 # 制限時間の表示と管理
 time_limit = set_time_limit(st.session_state.difficulty)
-if time_limit is not None:
-    if st.session_state.start_time is None:
-        st.session_state.start_time = time.time()
+if time_limit is not None and st.session_state.start_time is not None:
     elapsed_time = time.time() - st.session_state.start_time
     time_left = max(time_limit - elapsed_time, 0)
     st.sidebar.text(f"残り時間: {int(time_left // 60)}分{int(time_left % 60)}秒")
-    if time_left <= 0:
+    if time_left <= 0 and not st.session_state.time_up:
+        st.session_state.time_up = True
         st.error("制限時間です。次の問題に進んでください。")
-        reset_question()
 
-# 以下、質問入力、質問送信ボタン、履歴の表示などのコードはそのまま...
-
-# 質問送信ボタン
-if st.button('質問する'):
+# 質問の送信
+question = st.text_input("質問を入力してください", key="question")
+if st.button('質問を送信'):
     if question:
         # 質問をAPIに送信して回答を取得
         answer = ask_question_to_gpt(question)
         # 履歴を更新
         st.session_state.history.append({'question': question, 'answer': answer})
-        # 経験値を追加
-        add_experience(len(st.session_state.history))
+        st.session_state['question'] = ""  # 質問入力欄をリセット
     else:
         st.error("質問を入力してください。")
 
-# 問題の出題
-present_question()
-
-# ユーザーによる回答入力
-user_answer = st.text_input("答えが分かったらここに入力してください")
-
-# 回答ボタン
-if st.button('答えを入力'):
+# 答えの送信
+user_answer = st.text_input("答えが分かったらここに入力してください", key="user_answer")
+if st.button('答えを送信'):
     if check_answer(user_answer):
         st.success("大正解！")
         add_experience(len(st.session_state.history))  # 正解したので経験値を追加
@@ -141,9 +137,9 @@ if st.button('答えを入力'):
     else:
         st.error("不正解です。もう一度考えてみてください。")
 
-# 問題を解き直す、別の問題を解くの選択
-if st.button('同じ問題を解き直す'):
-    reset_question()
-    present_question()
-if st.button('別の問題を解く'):
-    reset_question()
+# 履歴の表示
+if st.session_state.history:
+    st.subheader("質問履歴")
+    for entry in st.session_state.history:
+        st.text(f"Q: {entry['question']}")
+        st.text(f"A: {entry['answer']}")
