@@ -33,18 +33,21 @@ if 'questions' not in st.session_state:
             'text': 'プログラミングに興味があるハヤトくん。一番プログラミングを教えるのが上手いと思うプログラミングスクールへ向かったハヤトくんは、「定員に達しましたため、受付を終了します」の札を見て喜んでいます。何故でしょうか？',
             'answer': 'ハヤトくんはそのプログラミングスクールの経営者であり、自分の経営するプログラミングスクールの募集状況を確認しに行ったところ、満員となっていることが分かったため喜んだ。',
             'difficulty': 'かんたん'
+            'Caution when responding': 'ハヤトくんはプログラミングスクールの経営者であるため、プログラミングスクールに通いたかった訳では無い点は注意して回答するようにしてください。'
         },
         {
             'title': '逆走するタクシー運転手のノリミネさん',
-            'text': 'タクシー運転手をしているノリミネさん。ある時ノリミネさんは、一方通行の道を逆方向に走っていました。パトロール中の警察官に見られてしまいましたが、怒られませんでした。何故でしょうか？',
+            'text': 'タクシー運転手をしているノリミネさん。ある時ノリミネさんは、一方通行の道を逆方向に進んでいました。パトロール中の警察官に見られてしまいましたが、怒られませんでした。何故でしょうか？',
             'answer': 'ノリミネさんは車に乗っておらず、一方通行の道を徒歩で逆方向に進んでいただけだったため。',
             'difficulty': 'ふつう'
+            'Caution when responding': 'ノリミネさんは徒歩で逆方向に進んでいただけなので、交通違反はしていません。'
         },
         {
             'title': '双子じゃない！？',
             'text': 'ある女性から生まれた子供2人は、同じ日の同じ時間に誕生しています。でも、なぜか2人は双子ではありませんでした。何故でしょうか？',
             'answer': '女性の子供は双子ではなく、三つ子だったため。',
             'difficulty': 'むずかしい'
+            'Caution when responding': '双子の親はどちらも同じ母親、父親です。双子は血が繋がっています。三つ子以上の四つ子などを答えた場合でも正解にしてください。'
         },
     ]
 
@@ -113,17 +116,24 @@ def check_answer(user_answer):
 # ChatGPTに質問を送信し、回答を取得する関数
 def ask_question_to_gpt(question):
     try:
+        messages = [
+            {"role": "system", "content": ""},
+            {"role": "user", "content": question}
+        ]
+
+        # 過去の質問と回答をAPIリクエストに含める
+        for qa in st.session_state.history:
+            messages.append({"role": "user", "content": qa["question"]})
+            messages.append({"role": "assistant", "content": qa["answer"]})
+
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "あなたは「ウミガメのスープ」ゲームの出題者です。問題文と解答を確認した上で、ユーザーから送信される質問に対して適切な回答をしてください。以下の選択肢から回答してください: はい、いいえ、たぶんはい、たぶんいいえ、はい（回答にはあまり関係ない）、いいえ（回答にはあまり関係ない）、わからない。"},
-                {"role": "user", "content": question},
-            ]
+            model="gpt-4-turbo",
+            messages=messages
         )
         return response.choices[0].message["content"].strip()
     except openai.error.OpenAIError as e:
         return f"エラーが発生しました: {e}"
-
+    
 # 問題を出題する関数
 def present_question():
     if st.session_state.current_question is None:
