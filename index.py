@@ -142,8 +142,9 @@ def ask_question_to_gpt(question):
             messages=messages
         )
         return response.choices[0].message["content"].strip()
-    except openai.error.OpenAIError as e:
-        return f"エラーが発生しました: {e}"
+    except Exception as e:  # ここを変更
+        print(f"エラーが発生しました: {e}")
+        # 必要に応じてさらにエラー情報を表示
 
 # 問題を出題する関数
 def present_question():
