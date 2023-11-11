@@ -5,7 +5,7 @@ import time
 import random
 
 # アクセスのためのキーを設定
-openai.api_key = st.secrets["openai"]["api_key"]
+openai.api_key = st.secrets["openai"]["api_key2"]
 
 # セッション状態の初期化
 if 'history' not in st.session_state:
